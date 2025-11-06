@@ -10,23 +10,26 @@ import SwiftData
 
 @main
 struct NexShadeApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @State private var appCoordinator: AppCoordinator
+
+    init() {
+        let container = DependencyContainer()
+        appCoordinator = AppCoordinator(container: container)
+    }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AppCoordinatorView(coordinator: appCoordinator)
         }
-        .modelContainer(sharedModelContainer)
+    }
+}
+
+struct AppCoordinatorView: View {
+
+    let coordinator: AppCoordinator
+
+    var body: some View {
+        coordinator.start()
     }
 }
