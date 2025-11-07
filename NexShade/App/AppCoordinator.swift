@@ -8,13 +8,6 @@
 import SwiftUI
 import Observation
 
-enum UserRole {
-    case owner
-    case serviceTechnician
-}
-
-
-
 @Observable
 @MainActor
 final class AppCoordinator {

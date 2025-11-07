@@ -1,3 +1,11 @@
+//
+//  Invitation.swift
+//  NexShade
+//
+//  Created by Ali Eren on 7.11.2025.
+//
+
+
 // Domain/Entities/Invitation.swift
 
 import Foundation

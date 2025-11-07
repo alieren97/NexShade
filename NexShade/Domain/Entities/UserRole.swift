@@ -5,9 +5,6 @@
 //  Created by Ali Eren on 7.11.2025.
 //
 
-
-// Domain/Entities/UserRole.swift
-
 import Foundation
 
 /// User role enum

@@ -1,17 +1,29 @@
-protocol AuthenticationRepositoryProtocol {
-    func readChallenge(deviceId: UUID) async throws -> Data
-    func authenticate(deviceId: UUID, publicKey: Data, signature: Data) async throws -> AuthenticationResult
-    
-    func storeAuthenticatedUser(_ user: User, for deviceId: UUID) async throws
-    func getAuthenticatedUser(for deviceId: UUID) async throws -> User?
-    
-    func hasPermission(_ permission: Permissions) -> Bool
-    
-    func generateKeyPair() throws -> KeyPair
-    func getPublicKey() throws -> Data
-}
+//
+//  AuthenticationRepositoryProtocol.swift
+//  NexShade
+//
+//  Created by Ali Eren on 6.11.2025.
+//
 
-struct KeyPair {
-    let publicKey: Data
-    let privateKey: Data
+import Foundation
+
+protocol AuthenticationRepositoryProtocol {
+    // Key Management
+    func generateKeyPair() async throws -> KeyPair
+    func getPrivateKey(for deviceId: UUID) async throws -> Data?
+    func savePrivateKey(_ key: Data, for deviceId: UUID) async throws
+    func deletePrivateKey(for deviceId: UUID) async throws
+    
+    // Authentication
+    func hasCredentials(for deviceId: UUID) async throws -> Bool
+    func authenticate(deviceId: UUID) async throws -> AuthenticationResult
+    func signChallenge(_ challenge: Data, with privateKey: Data) async throws -> Data
+    func clearAuthState(for deviceId: UUID) async throws
+    
+    // Permissions
+    func getPermissions(for deviceId: UUID) async throws -> Permissions
+    func isOwner(of deviceId: UUID) async throws -> Bool
+    
+    // Auth State
+    func storeAuthResult(_ result: AuthenticationResult, for deviceId: UUID) async throws
 }

@@ -6,8 +6,6 @@
 //
 
 
-// Data/DataSources/Local/LocalDataSource.swift
-
 import Foundation
 import SwiftData
 import OSLog
@@ -254,7 +252,7 @@ final class LocalDataSource {
     
     /// Reset the context (clear all cached objects)
     func reset() {
-        modelContext.reset()
+//        modelContext.
         logger.info("Context reset")
     }
 }

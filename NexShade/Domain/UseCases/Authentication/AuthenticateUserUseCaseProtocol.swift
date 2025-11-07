@@ -5,9 +5,6 @@
 //  Created by Ali Eren on 6.11.2025.
 //
 
-
-// Domain/UseCases/Authentication/AuthenticateUserUseCase.swift
-
 import Foundation
 
 /// Use case for authenticating with a device

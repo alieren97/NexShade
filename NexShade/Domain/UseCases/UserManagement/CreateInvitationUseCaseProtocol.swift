@@ -76,18 +76,18 @@ final class CreateInvitationUseCase: CreateInvitationUseCaseProtocol {
             deviceId: deviceId,
             code: code,
             permissions: permissions,
+            guestName: guestName,
             createdAt: Date(),
             expiresAt: expiresAt,
-            guestName: guestName,
             isRedeemed: false
         )
         
         // Step 5: Send invitation to device
-        try await deviceRepository.createInvitation(invitation)
-        
-        // Step 6: Store invitation locally
-        try await userRepository.saveInvitation(invitation)
-        
+//        try await deviceRepository.createInvitation(invitation)
+//        
+//        // Step 6: Store invitation locally
+//        try await userRepository.saveInvitation(invitation)
+//        
         return invitation
     }
     

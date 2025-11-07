@@ -6,13 +6,11 @@
 //
 
 
-// Domain/UseCases/Device/ScanForDevicesUseCase.swift
-
 import Foundation
 
 /// Use case for scanning BLE devices
 protocol ScanForDevicesUseCaseProtocol {
-    func execute() -> AsyncStream<Device>
+    func execute() -> AsyncStream<BLEDevice>
     func stopScanning()
 }
 
@@ -20,24 +18,24 @@ final class ScanForDevicesUseCase: ScanForDevicesUseCaseProtocol {
     
     // MARK: - Dependencies
     
-    private let deviceRepository: DeviceRepositoryProtocol
+    private let bleScanning: BLEScanning
     
     // MARK: - Initialization
     
-    init(deviceRepository: DeviceRepositoryProtocol) {
-        self.deviceRepository = deviceRepository
+    init(bleScanning: BLEScanning) {
+        self.bleScanning = bleScanning
     }
     
     // MARK: - Execute
     
     /// Start scanning for nearby devices
     /// - Returns: AsyncStream of discovered devices
-    func execute() -> AsyncStream<Device> {
-        return deviceRepository.scanForDevices()
+    func execute() -> AsyncStream<BLEDevice> {
+        return bleScanning.startScanning()
     }
     
     /// Stop scanning
     func stopScanning() {
-        deviceRepository.stopScanning()
+        bleScanning.stopScanning()
     }
 }

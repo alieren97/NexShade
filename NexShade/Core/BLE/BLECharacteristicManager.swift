@@ -1,3 +1,11 @@
+//
+//  BLECharacteristicManager.swift
+//  NexShade
+//
+//  Created by Ali Eren on 6.11.2025.
+//
+
+
 import Foundation
 import CoreBluetooth
 import Observation
@@ -8,7 +16,7 @@ import OSLog
 final class BLECharacteristicManager: NSObject {
     
     // MARK: - Private Properties
-    
+
     private let logger = Logger(subsystem: "com.pergola.ble", category: "CharacteristicManager")
     
     // Storage for discovered characteristics
@@ -56,8 +64,10 @@ final class BLECharacteristicManager: NSObject {
             // Add discovery task
             group.addTask {
                 try await withCheckedThrowingContinuation { continuation in
-                    self.serviceDiscoveryContinuations[peripheral.identifier] = continuation
-                    peripheral.discoverServices(serviceUUIDs)
+                    Task { @MainActor in
+                        self.serviceDiscoveryContinuations[peripheral.identifier] = continuation
+                        peripheral.discoverServices(serviceUUIDs)
+                    }
                 }
             }
             
@@ -90,8 +100,10 @@ final class BLECharacteristicManager: NSObject {
             // Add discovery task
             group.addTask {
                 try await withCheckedThrowingContinuation { continuation in
-                    self.characteristicDiscoveryContinuations[peripheral.identifier] = continuation
-                    peripheral.discoverCharacteristics(characteristicUUIDs, for: service)
+                    Task { @MainActor in
+                        self.characteristicDiscoveryContinuations[peripheral.identifier] = continuation
+                        peripheral.discoverCharacteristics(characteristicUUIDs, for: service)
+                    }
                 }
             }
             
@@ -183,8 +195,10 @@ final class BLECharacteristicManager: NSObject {
             // Add read task
             group.addTask {
                 try await withCheckedThrowingContinuation { continuation in
-                    self.readContinuations[deviceId] = continuation
-                    peripheral.readValue(for: characteristic)
+                    Task { @MainActor in
+                        self.readContinuations[deviceId] = continuation
+                        peripheral.readValue(for: characteristic)
+                    }
                 }
             }
             
@@ -240,8 +254,10 @@ final class BLECharacteristicManager: NSObject {
                 // Add write task
                 group.addTask {
                     try await withCheckedThrowingContinuation { continuation in
-                        self.writeContinuations[deviceId] = continuation
-                        peripheral.writeValue(data, for: characteristic, type: .withResponse)
+                        Task { @MainActor in
+                            self.writeContinuations[deviceId] = continuation
+                            peripheral.writeValue(data, for: characteristic, type: .withResponse)
+                        }
                     }
                 }
                 

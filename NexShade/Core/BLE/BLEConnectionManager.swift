@@ -1,9 +1,19 @@
-// Core/BLE/BLEConnectionManager.swift
+//
+//  BLEConnectionManager.swift
+//  NexShade
+//
+//  Created by Ali Eren on 6.11.2025.
+//
 
 import Foundation
 import CoreBluetooth
 import Observation
 import OSLog
+
+protocol BLEScanning {
+    func startScanning() -> AsyncStream<BLEDevice>
+    func stopScanning()
+}
 
 /// Manages BLE scanning, connection, and peripheral lifecycle
 @Observable
@@ -51,64 +61,6 @@ final class BLEConnectionManager: NSObject {
         logger.info("BLEConnectionManager initialized")
     }
     
-    // MARK: - Public Methods - Scanning
-    
-    /// Start scanning for BLE devices
-    /// - Returns: AsyncStream of discovered devices
-    func startScanning() -> AsyncStream<BLEDevice> {
-        logger.info("Starting BLE scan")
-        
-        return AsyncStream { continuation in
-            self.scanContinuation = continuation
-            
-            Task { @MainActor in
-                // Check if Bluetooth is ready
-                guard self.bluetoothState == .poweredOn else {
-                    self.logger.error("Bluetooth not powered on, state: \(String(describing: self.bluetoothState))")
-                    continuation.finish()
-                    return
-                }
-                
-                // Clear previous discoveries
-                self.discoveredDevices.removeAll()
-                
-                // Start scanning
-                self.isScanning = true
-                self.centralManager.scanForPeripherals(
-                    withServices: [BLEConfiguration.pergolaServiceUUID],
-                    options: BLEConfiguration.scanOptions
-                )
-                
-                self.logger.info("Scan started")
-                
-                // Auto-stop after timeout
-                Task {
-                    try? await Task.sleep(for: .seconds(BLEConfiguration.scanTimeout))
-                    if self.isScanning {
-                        self.stopScanning()
-                    }
-                }
-            }
-            
-            continuation.onTermination = { @Sendable _ in
-                Task { @MainActor in
-                    self.stopScanning()
-                }
-            }
-        }
-    }
-    
-    /// Stop scanning for devices
-    func stopScanning() {
-        guard isScanning else { return }
-        
-        logger.info("Stopping BLE scan")
-        centralManager.stopScan()
-        isScanning = false
-        scanContinuation?.finish()
-        scanContinuation = nil
-    }
-    
     // MARK: - Public Methods - Connection
     
     /// Connect to a peripheral
@@ -123,13 +75,16 @@ final class BLEConnectionManager: NSObject {
             return
         }
         
-        // Find the peripheral
-        guard let device = discoveredDevices[deviceId] ?? connectedPeripherals[deviceId] else {
+        let peripheral: CBPeripheral
+        
+        if let bleDevice = discoveredDevices[deviceId] {
+            peripheral = bleDevice.peripheral
+        } else if let connectedPeripheral = connectedPeripherals[deviceId] {
+            peripheral = connectedPeripheral
+        } else {
             logger.error("Device not found: \(deviceId)")
             throw BLEError.deviceNotFound(deviceId)
         }
-        
-        let peripheral = device is BLEDevice ? (device as! BLEDevice).peripheral : device as! CBPeripheral
         
         // Set connecting state
         connectionStates[deviceId] = .connecting
@@ -144,8 +99,13 @@ final class BLEConnectionManager: NSObject {
             // Add connection task
             group.addTask {
                 try await withCheckedThrowingContinuation { continuation in
-                    self.connectionContinuations[deviceId] = continuation
-                    self.centralManager.connect(peripheral, options: BLEConfiguration.connectionOptions)
+                    
+                    // --- FIX APPLIED HERE ---
+                    // Move the mutation of the MainActor-isolated property onto the MainActor
+                    Task { @MainActor in
+                        self.connectionContinuations[deviceId] = continuation
+                        self.centralManager.connect(peripheral, options: BLEConfiguration.connectionOptions)
+                    }
                 }
             }
             
@@ -365,5 +325,61 @@ extension BLEConnectionManager: CBCentralManagerDelegate {
                 }
             }
         }
+    }
+}
+
+extension BLEConnectionManager: BLEScanning {
+    func startScanning() -> AsyncStream<BLEDevice> {
+        logger.info("Starting BLE scan")
+        
+        return AsyncStream { continuation in
+            self.scanContinuation = continuation
+            
+            Task { @MainActor in
+                // Check if Bluetooth is ready
+                guard self.bluetoothState == .poweredOn else {
+                    self.logger.error("Bluetooth not powered on, state: \(String(describing: self.bluetoothState))")
+                    continuation.finish()
+                    return
+                }
+                
+                // Clear previous discoveries
+                self.discoveredDevices.removeAll()
+                
+                // Start scanning
+                self.isScanning = true
+                self.centralManager.scanForPeripherals(
+                    withServices: [BLEConfiguration.pergolaServiceUUID],
+                    options: BLEConfiguration.scanOptions
+                )
+                
+                self.logger.info("Scan started")
+                
+                // Auto-stop after timeout
+                Task {
+                    try? await Task.sleep(for: .seconds(BLEConfiguration.scanTimeout))
+                    if self.isScanning {
+                        self.stopScanning()
+                    }
+                }
+            }
+            
+            continuation.onTermination = { @Sendable _ in
+                Task { @MainActor in
+                    self.stopScanning()
+                }
+            }
+        }
+    }
+    
+    /// Stop scanning for devices
+    func stopScanning() {
+        guard isScanning else { return }
+        
+        logger.info("Stopping BLE scan")
+        centralManager.stopScan()
+        isScanning = false
+        scanContinuation?.finish()
+        scanContinuation = nil
     }
 }

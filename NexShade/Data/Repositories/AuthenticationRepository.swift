@@ -1,4 +1,9 @@
-// Data/Repositories/AuthenticationRepository.swift
+//
+//  AuthenticationRepository.swift
+//  NexShade
+//
+//  Created by Ali Eren on 6.11.2025.
+//
 
 import Foundation
 import CryptoKit
@@ -152,7 +157,7 @@ final class AuthenticationRepository: AuthenticationRepositoryProtocol {
         // Step 7: Save to local database
         try await storeAuthResult(authResult, for: deviceId)
         
-        logger.info("Authentication successful - Role: \(authResult.role)")
+        logger.info("Authentication successful - Role: \(authResult.role.rawValue)")
         return authResult
     }
     

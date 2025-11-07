@@ -5,9 +5,6 @@
 //  Created by Ali Eren on 6.11.2025.
 //
 
-
-// Core/BLE/BLETypes.swift
-
 import Foundation
 import CoreBluetooth
 
@@ -37,39 +34,6 @@ struct BLEDevice: Identifiable, Hashable, Equatable {
     
     static func == (lhs: BLEDevice, rhs: BLEDevice) -> Bool {
         lhs.id == rhs.id
-    }
-}
-
-// MARK: - Connection State
-
-enum ConnectionState: Equatable {
-    case disconnected
-    case scanning
-    case connecting
-    case discoveringServices
-    case discoveringCharacteristics
-    case ready
-    case disconnecting
-    case error(BLEError)
-    
-    var isConnected: Bool {
-        if case .ready = self {
-            return true
-        }
-        return false
-    }
-    
-    var description: String {
-        switch self {
-        case .disconnected: return "Disconnected"
-        case .scanning: return "Scanning..."
-        case .connecting: return "Connecting..."
-        case .discoveringServices: return "Discovering services..."
-        case .discoveringCharacteristics: return "Setting up..."
-        case .ready: return "Connected"
-        case .disconnecting: return "Disconnecting..."
-        case .error(let error): return "Error: \(error.localizedDescription)"
-        }
     }
 }
 

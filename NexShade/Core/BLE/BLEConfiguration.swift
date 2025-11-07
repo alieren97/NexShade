@@ -1,4 +1,9 @@
-// Core/BLE/BLEConfiguration.swift
+//
+//  BLEConfiguration.swift
+//  NexShade
+//
+//  Created by Ali Eren on 6.11.2025.
+//
 
 import Foundation
 import CoreBluetooth

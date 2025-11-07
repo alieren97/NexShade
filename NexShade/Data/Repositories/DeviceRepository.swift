@@ -5,194 +5,90 @@
 //  Created by Ali Eren on 6.11.2025.
 //
 
-
-// Data/Repositories/DeviceRepository.swift
+import Foundation
+import OSLog
 
 final class DeviceRepository: DeviceRepositoryProtocol {
     
-    // DEPENDENCY INJECTION - Data Sources
-    private let bleDataSource: BLEDataSource
-    private let localDataSource: CoreDataDataSource
+    // MARK: - Dependencies (CORRECTED!)
+    
+    private let bleDataSource: BLEDataSourceProtocol
+    private let localDataSource: LocalDataSource
     private let mapper: DeviceMapper
+    private let logger = Logger(subsystem: "com.pergola", category: "DeviceRepository")
+    
+    // MARK: - Initialization
     
     init(
-        bleDataSource: BLEDataSource,
-        localDataSource: CoreDataDataSource,
-        mapper: DeviceMapper
+        bleDataSource: BLEDataSourceProtocol,
+        localDataSource: LocalDataSource,
+        mapper: DeviceMapper = DeviceMapper()
     ) {
         self.bleDataSource = bleDataSource
         self.localDataSource = localDataSource
         self.mapper = mapper
     }
     
+    // MARK: - Device Management
+    
     func getDevices() async throws -> [Device] {
-        // Get from local storage
-        let dtos = try await localDataSource.fetchDevices()
-        return dtos.map { mapper.toDomain($0) }
+        // Fetch from SwiftData
+        let models = try await localDataSource.fetch(DeviceModel.self)
+        return models.map { mapper.toDomain($0) }
     }
+    
+    func getDevice(id: UUID) async throws -> Device? {
+        let predicate = #Predicate<DeviceModel> { $0.id == id }
+        let models = try await localDataSource.fetch(DeviceModel.self, predicate: predicate)
+        return models.first.map { mapper.toDomain($0) }
+    }
+    
+    func saveDevice(_ device: Device) async throws {
+        let model = mapper.toModel(device)
+        try await localDataSource.save(model)
+    }
+    
+    func deleteDevice(id: UUID) async throws {
+        let predicate = #Predicate<DeviceModel> { $0.id == id }
+        try await localDataSource.delete(DeviceModel.self, where: predicate)
+    }
+    
+    // MARK: - Connection
     
     func connect(to deviceId: UUID) async throws {
         try await bleDataSource.connect(to: deviceId)
     }
     
+    func disconnect(from deviceId: UUID) async throws {
+        try await bleDataSource.disconnect(from: deviceId)
+    }
+    
+    func discoverServices(for deviceId: UUID) async throws {
+        try await bleDataSource.discoverServices(for: deviceId)
+    }
+    
+    // MARK: - Control
+    
     func sendCommand(deviceId: UUID, command: PergolaCommand) async throws -> PergolaStatus {
-        // Convert to BLE command
-        let bleCommand = mapToBLECommand(command)
-        
-        // Send via BLE
-        try await bleDataSource.writeCharacteristic(
-            deviceId: deviceId,
-            characteristic: .control,
-            value: bleCommand
-        )
-        
-        // Read response
-        let statusDTO = try await bleDataSource.readCharacteristic(
-            deviceId: deviceId,
-            characteristic: .status
-        )
-        
-        // Map to domain
-        return mapper.statusToDomain(statusDTO)
+        try await bleDataSource.sendCommand(deviceId: deviceId, command: command)
+        return try await bleDataSource.readStatus(from: deviceId)
     }
     
-    func observeStatus(deviceId: UUID) -> AsyncStream<PergolaStatus> {
-        AsyncStream { continuation in
-            let task = Task {
-                // Subscribe to BLE notifications
-                for await statusDTO in bleDataSource.observeNotifications(
-                    deviceId: deviceId,
-                    characteristic: .status
-                ) {
-                    let status = mapper.statusToDomain(statusDTO)
-                    continuation.yield(status)
-                }
-            }
-            
-            continuation.onTermination = { _ in
-                task.cancel()
-            }
-        }
+    // MARK: - Status
+    
+    func getStatus(for deviceId: UUID) async throws -> PergolaStatus {
+        return try await bleDataSource.readStatus(from: deviceId)
     }
     
-    private func mapToBLECommand(_ command: PergolaCommand) -> Data {
-        switch command {
-        case .open:
-            return "OPEN".data(using: .utf8)!
-        case .close:
-            return "CLOSE".data(using: .utf8)!
-        case .stop:
-            return "STOP".data(using: .utf8)!
-        case .setPosition(let position):
-            return "POSITION:\(position)".data(using: .utf8)!
-        }
-    }
-}
-
-// Data/DataSources/Remote/BLEDataSource.swift
-
-final class BLEDataSource {
-    
-    private let connectionManager: BLEConnectionManager
-    private let characteristicManager: BLECharacteristicManager
-    
-    init(
-        connectionManager: BLEConnectionManager,
-        characteristicManager: BLECharacteristicManager
-    ) {
-        self.connectionManager = connectionManager
-        self.characteristicManager = characteristicManager
+    func observeStatus(for deviceId: UUID) -> AsyncStream<PergolaStatus> {
+        return bleDataSource.observeStatusUpdates(for: deviceId)
     }
     
-    func connect(to deviceId: UUID) async throws {
-        try await connectionManager.connect(to: deviceId)
+    func readChallenge(from deviceId: UUID) async throws -> Data {
+        return try await bleDataSource.readChallenge(from: deviceId)
     }
     
-    func writeCharacteristic(
-        deviceId: UUID,
-        characteristic: BLECharacteristic,
-        value: Data
-    ) async throws {
-        try await characteristicManager.write(
-            to: characteristic,
-            value: value,
-            for: deviceId
-        )
-    }
-    
-    func readCharacteristic(
-        deviceId: UUID,
-        characteristic: BLECharacteristic
-    ) async throws -> Data {
-        try await characteristicManager.read(
-            from: characteristic,
-            for: deviceId
-        )
-    }
-    
-    func observeNotifications(
-        deviceId: UUID,
-        characteristic: BLECharacteristic
-    ) -> AsyncStream<Data> {
-        characteristicManager.observeNotifications(
-            for: characteristic,
-            deviceId: deviceId
-        )
-    }
-}
-
-// Data/Mappers/DeviceMapper.swift
-
-struct DeviceMapper {
-    
-    // DTO → Domain Entity
-    func toDomain(_ dto: DeviceDTO) -> Device {
-        Device(
-            id: dto.id,
-            name: dto.name,
-            macAddress: dto.macAddress,
-            status: mapStatus(dto.status),
-            connectionState: .disconnected,
-            role: mapRole(dto.role),
-            permissions: mapPermissions(dto.permissionRawValue)
-        )
-    }
-    
-    // Domain Entity → DTO
-    func toDTO(_ domain: Device) -> DeviceDTO {
-        DeviceDTO(
-            id: domain.id,
-            name: domain.name,
-            macAddress: domain.macAddress,
-            status: domain.status == .online ? "online" : "offline",
-            role: domain.role.rawValue,
-            permissionRawValue: domain.permissions.rawValue
-        )
-    }
-    
-    func statusToDomain(_ data: Data) -> PergolaStatus {
-        // Parse BLE status data
-        // Format: "Position: 75% (Moving)"
-        let string = String(data: data, encoding: .utf8) ?? ""
-        let position = extractPosition(from: string)
-        let isMoving = string.contains("Moving")
-        
-        return PergolaStatus(
-            position: position,
-            isMoving: isMoving,
-            direction: isMoving ? .opening : nil,
-            lastUpdated: Date()
-        )
-    }
-    
-    private func extractPosition(from string: String) -> Int {
-        // Extract number from "Position: 75%"
-        let components = string.components(separatedBy: " ")
-        guard components.count > 1,
-              let percentString = components[1].components(separatedBy: "%").first,
-              let position = Int(percentString) else {
-            return 0
-        }
-        return position
+    func sendAuthResponse(deviceId: UUID, signature: Data) async throws -> AuthenticationResult {
+        return try await bleDataSource.sendAuthResponse(deviceId: deviceId, signature: signature)
     }
 }

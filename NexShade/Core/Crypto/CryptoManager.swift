@@ -5,9 +5,6 @@
 //  Created by Ali Eren on 7.11.2025.
 //
 
-
-// Core/Crypto/CryptoManager.swift
-
 import Foundation
 import CryptoKit
 import OSLog

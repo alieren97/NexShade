@@ -1,7 +1,17 @@
+//
+//  AuthenticationResult.swift
+//  NexShade
+//
+//  Created by Ali Eren on 6.11.2025.
+//
+
+import Foundation
+
 struct AuthenticationResult {
     let success: Bool
-    let user: User?
     let error: AuthenticationError?
+    let role: UserRole
+    let permissions: Permissions
     
     enum AuthenticationError: Error {
         case invalidSignature

@@ -5,32 +5,38 @@
 //  Created by Ali Eren on 6.11.2025.
 //
 
-
+import Foundation
 
 struct DeviceMapper {
     
     // DTO → Domain Entity
-    func toDomain(_ dto: DeviceDTO) -> Device {
+    func toDomain(_ model: DeviceModel) -> Device {
         Device(
-            id: dto.id,
-            name: dto.name,
-            macAddress: dto.macAddress,
-            status: mapStatus(dto.status),
-            connectionState: .disconnected,
-            role: mapRole(dto.role),
-            permissions: mapPermissions(dto.permissionRawValue)
+            id: model.id,
+            name: model.name,
+            macAddress: model.macAddress,
+            connectionState: ConnectionState(rawValue: model.connectionStateRaw) ?? .disconnected,
+            userRole: UserRole(rawValue: model.userRoleRaw) ?? .guest,
+            permissions: Permissions(rawValue: model.permissionRawValue),
+            isAuthenticated: model.isAuthenticated,
+            createdAt: model.createdAt,
+            updatedAt: model.updatedAt
         )
     }
     
-    // Domain Entity → DTO
-    func toDTO(_ domain: Device) -> DeviceDTO {
-        DeviceDTO(
+    // Domain → Model
+    func toModel(_ domain: Device) -> DeviceModel {
+        DeviceModel(
             id: domain.id,
             name: domain.name,
             macAddress: domain.macAddress,
-            status: domain.status == .online ? "online" : "offline",
-            role: domain.role.rawValue,
-            permissionRawValue: domain.permissions.rawValue
+            connectionStateRaw: domain.connectionState.rawValue,
+            userRoleRaw: domain.userRole.rawValue,
+            permissionRawValue: domain.permissions.rawValue,
+            isAuthenticated: domain.isAuthenticated,
+            lastConnected: domain.lastConnected,
+            createdAt: domain.createdAt,
+            updatedAt: domain.updatedAt
         )
     }
     

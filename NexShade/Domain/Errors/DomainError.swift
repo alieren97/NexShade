@@ -1,3 +1,12 @@
+//
+//  DomainError.swift
+//  NexShade
+//
+//  Created by Ali Eren on 7.11.2025.
+//
+
+import Foundation
+
 enum DomainError: LocalizedError, Equatable {
     
     // MARK: - Device Errors
