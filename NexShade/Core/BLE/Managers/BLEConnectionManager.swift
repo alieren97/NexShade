@@ -7,12 +7,15 @@
 
 import Foundation
 import CoreBluetooth
+import Combine
 import Observation
 import OSLog
 
 protocol BLEScanning {
     func startScanning() -> AsyncStream<BLEDevice>
     func stopScanning()
+    func observeIsScanning() -> AsyncStream<Bool>
+
 }
 
 /// Manages BLE scanning, connection, and peripheral lifecycle
@@ -23,9 +26,11 @@ final class BLEConnectionManager: NSObject {
     // MARK: - Observable Properties
     
     private(set) var isScanning = false
-    private(set) var discoveredDevices: [UUID: BLEDevice] = [:]
-    private(set) var connectedPeripherals: [UUID: CBPeripheral] = [:]
-    private(set) var connectionStates: [UUID: ConnectionState] = [:]
+
+    private var discoveredDevices: [UUID: BLEDevice] = [:]
+    private var connectedPeripherals: [UUID: CBPeripheral] = [:]
+    private var connectionStates: [UUID: ConnectionState] = [:]
+    private var activeConnectionAttempts: Set<UUID> = []
     private(set) var bluetoothState: CBManagerState = .unknown
     
     // MARK: - Private Properties
@@ -41,7 +46,21 @@ final class BLEConnectionManager: NSObject {
     // State restoration
     private var shouldRestoreState = false
     private var restoredPeripherals: [CBPeripheral] = []
-    
+
+    // MARK: - State Publishers
+
+    /// Publishes connection state changes for each device
+    private let connectionStateSubject = PassthroughSubject<(UUID, ConnectionState), Never>()
+
+    /// Observable connection state stream
+    var connectionStatePublisher: AnyPublisher<(UUID, ConnectionState), Never> {
+        connectionStateSubject.eraseToAnyPublisher()
+    }
+
+    // MARK: - Limits
+
+     private let maxConcurrentConnections = 5
+
     // MARK: - Initialization
     
     override init() {
@@ -62,112 +81,153 @@ final class BLEConnectionManager: NSObject {
     }
     
     // MARK: - Public Methods - Connection
-    
-    /// Connect to a peripheral
-    /// - Parameter deviceId: UUID of the device to connect
-    /// - Throws: BLEError if connection fails
+
     func connect(to deviceId: UUID) async throws {
-        logger.info("Attempting to connect to device: \(deviceId)")
-        
-        // Check if already connected
-        if let state = connectionStates[deviceId], state.isConnected {
-            logger.info("Device already connected")
+        logger.info("🔵 Connecting to device: \(deviceId)")
+
+        // 1. ✅ Check if already connected
+        if let state = connectionStates[deviceId], state == .connected {
+            logger.info("✅ Already connected to \(deviceId)")
             return
         }
-        
-        let peripheral: CBPeripheral
-        
-        if let bleDevice = discoveredDevices[deviceId] {
-            peripheral = bleDevice.peripheral
-        } else if let connectedPeripheral = connectedPeripherals[deviceId] {
-            peripheral = connectedPeripheral
-        } else {
-            logger.error("Device not found: \(deviceId)")
+
+        // 2. ✅ Check if connection already in progress
+        if activeConnectionAttempts.contains(deviceId) {
+            logger.warning("⚠️ Connection already in progress for \(deviceId)")
+            throw BLEError.connectionInProgress(deviceId)
+        }
+
+        // 3. ✅ Check concurrent connection limit
+        if activeConnectionAttempts.count >= maxConcurrentConnections {
+            logger.warning("⚠️ Maximum concurrent connections reached")
+            throw BLEError.tooManyConcurrentConnections
+        }
+
+        // 4. Find peripheral
+        guard let peripheral = findPeripheral(for: deviceId) else {
+            logger.error("❌ Device not found: \(deviceId)")
             throw BLEError.deviceNotFound(deviceId)
         }
-        
-        // Set connecting state
-        connectionStates[deviceId] = .connecting
-        
-        return try await withThrowingTaskGroup(of: Void.self) { group in
-            // Add timeout task
-            group.addTask {
-                try await Task.sleep(for: .seconds(BLEConfiguration.connectionTimeout))
-                throw BLEError.connectionTimeout
-            }
-            
-            // Add connection task
-            group.addTask {
+
+        // 5. Mark as active attempt
+        activeConnectionAttempts.insert(deviceId)
+
+        // 6. Set connecting state
+        updateConnectionState(deviceId: deviceId, state: .connecting)
+
+        // 7. Connect with timeout
+        do {
+            try await connectWithTimeout(to: peripheral, timeout: 10.0)
+            logger.info("✅ Connected to \(deviceId)")
+        } catch {
+            logger.error("❌ Failed to connect to \(deviceId): \(error)")
+            // Clean up on failure
+            activeConnectionAttempts.remove(deviceId)
+            updateConnectionState(deviceId: deviceId, state: .error(.connectionFailed("")))
+            throw error
+        }
+
+        // 8. Remove from active attempts (success)
+        activeConnectionAttempts.remove(deviceId)
+    }
+
+    func disconnect(from deviceId: UUID) async throws {
+        logger.info("🔴 Disconnecting from device: \(deviceId)")
+
+        guard let peripheral = connectedPeripherals[deviceId] else {
+            throw BLEError.disconnected
+        }
+
+        updateConnectionState(deviceId: deviceId, state: .disconnecting)
+        centralManager.cancelPeripheralConnection(peripheral)
+    }
+
+    // MARK: - Concurrent Connection Helper
+
+    private func connectWithTimeout(
+        to peripheral: CBPeripheral,
+        timeout: TimeInterval
+    ) async throws {
+        let deviceId = peripheral.identifier
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+
+            // Task 1: Actual connection
+            group.addTask { @MainActor [weak self] in
+                guard let self = self else { return }
+
                 try await withCheckedThrowingContinuation { continuation in
-                    
-                    // --- FIX APPLIED HERE ---
-                    // Move the mutation of the MainActor-isolated property onto the MainActor
-                    Task { @MainActor in
-                        self.connectionContinuations[deviceId] = continuation
-                        self.centralManager.connect(peripheral, options: BLEConfiguration.connectionOptions)
-                    }
+                    // Store continuation for this device
+                    self.connectionContinuations[deviceId] = continuation
+
+                    // Initiate connection
+                    self.centralManager.connect(peripheral, options: nil)
                 }
             }
-            
-            // Wait for first to complete (either timeout or connection)
-            try await group.next()
-            
-            // Cancel remaining tasks
+
+            // Task 2: Timeout
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                throw BLEError.connectionTimeout
+            }
+
+            // First to complete wins
+            try await group.next()!
+
+            // Cancel the other task
             group.cancelAll()
-        }
-    }
-    
-    /// Disconnect from a peripheral
-    /// - Parameter deviceId: UUID of the device to disconnect
-    func disconnect(from deviceId: UUID) async {
-        logger.info("Disconnecting from device: \(deviceId)")
-        
-        guard let peripheral = connectedPeripherals[deviceId] else {
-            logger.warning("Device not connected: \(deviceId)")
-            return
-        }
-        
-        connectionStates[deviceId] = .disconnecting
-        
-        await withCheckedContinuation { continuation in
-            disconnectionContinuations[deviceId] = continuation
-            centralManager.cancelPeripheralConnection(peripheral)
-        }
-    }
-    
-    /// Get connection state for a device
-    /// - Parameter deviceId: UUID of the device
-    /// - Returns: Current connection state
-    func getConnectionState(for deviceId: UUID) -> ConnectionState {
-        return connectionStates[deviceId] ?? .disconnected
-    }
-    
-    /// Observe connection state changes
-    /// - Parameter deviceId: UUID of the device
-    /// - Returns: AsyncStream of connection states
-    func observeConnectionState(for deviceId: UUID) -> AsyncStream<ConnectionState> {
-        AsyncStream { continuation in
-            // Emit current state
-            if let currentState = connectionStates[deviceId] {
-                continuation.yield(currentState)
-            }
-            
-            // TODO: Implement state change observation
-            // This would require adding a state observation mechanism
-            
-            continuation.onTermination = { @Sendable _ in
-                // Cleanup if needed
+
+            // Clean up continuation on timeout
+            if self.connectionContinuations[deviceId] != nil {
+                self.connectionContinuations.removeValue(forKey: deviceId)
+                // Also cancel the connection attempt
+                self.centralManager.cancelPeripheralConnection(peripheral)
             }
         }
     }
-    
-    /// Get connected peripheral
-    /// - Parameter deviceId: UUID of the device
-    /// - Returns: CBPeripheral if connected, nil otherwise
+
+    // MARK: - Helpers
+
+    private func findPeripheral(for deviceId: UUID) -> CBPeripheral? {
+        if let device = discoveredDevices[deviceId] {
+            return device.peripheral
+        }
+        return connectedPeripherals[deviceId]
+    }
+
+    private func updateConnectionState(deviceId: UUID, state: ConnectionState) {
+        connectionStates[deviceId] = state
+        connectionStateSubject.send((deviceId, state))
+        logger.info("📊 State[\(deviceId)]: \(state.rawValue)")
+    }
+
     func getPeripheral(for deviceId: UUID) -> CBPeripheral? {
         return connectedPeripherals[deviceId]
     }
-    
+
+    func getConnectionState(for deviceId: UUID) -> ConnectionState {
+        return connectionStates[deviceId] ?? .disconnected
+    }
+
+    func getAllConnectedDevices() -> [UUID] {
+        return Array(connectedPeripherals.keys)
+    }
+
+    func observeConnectionState(for deviceId: UUID) -> AsyncStream<ConnectionState> {
+        AsyncStream { continuation in
+            let cancellable = connectionStatePublisher
+                .filter { $0.0 == deviceId }
+                .map { $0.1 }
+                .sink { state in
+                    continuation.yield(state)
+                }
+
+            continuation.onTermination = { _ in
+                cancellable.cancel()
+            }
+        }
+    }
+
     // MARK: - Public Methods - Signal Strength
     
     /// Read RSSI for connected peripheral
@@ -255,12 +315,11 @@ extension BLEConnectionManager: CBCentralManagerDelegate {
             // Store connected peripheral
             self.connectedPeripherals[deviceId] = peripheral
             
-            // Update state to discovering services
-            self.connectionStates[deviceId] = .discoveringServices
-            
-            // Resume connection continuation
-            self.connectionContinuations[deviceId]?.resume()
-            self.connectionContinuations.removeValue(forKey: deviceId)
+            updateConnectionState(deviceId: deviceId, state: .connected)
+
+            if let continuation = connectionContinuations.removeValue(forKey: deviceId) {
+                continuation.resume()
+            }
         }
     }
     
@@ -274,11 +333,12 @@ extension BLEConnectionManager: CBCentralManagerDelegate {
             self.logger.error("Failed to connect to device: \(deviceId), error: \(String(describing: error))")
             
             let bleError = BLEError.connectionFailed(error?.localizedDescription ?? "Unknown error")
-            self.connectionStates[deviceId] = .error(bleError)
-            
-            // Resume with error
-            self.connectionContinuations[deviceId]?.resume(throwing: bleError)
-            self.connectionContinuations.removeValue(forKey: deviceId)
+            updateConnectionState(deviceId: deviceId, state: .error(bleError))
+            activeConnectionAttempts.remove(deviceId)
+
+            if let continuation = connectionContinuations.removeValue(forKey: deviceId) {
+                continuation.resume(throwing: error ?? BLEError.connectionFailed(bleError.localizedDescription))
+            }
         }
     }
     
@@ -289,22 +349,18 @@ extension BLEConnectionManager: CBCentralManagerDelegate {
     ) {
         Task { @MainActor in
             let deviceId = peripheral.identifier
-            self.logger.info("Disconnected from device: \(deviceId)")
-            
-            // Remove from connected peripherals
-            self.connectedPeripherals.removeValue(forKey: deviceId)
-            
-            // Update state
+            logger.info("🔌 didDisconnect: \(deviceId)")
+
+            connectedPeripherals.removeValue(forKey: deviceId)
+            activeConnectionAttempts.remove(deviceId)
+
             if let error = error {
-                self.logger.error("Unexpected disconnection: \(error.localizedDescription)")
-                self.connectionStates[deviceId] = .error(.disconnected)
+                logger.error("Unexpected disconnection: \(error.localizedDescription)")
+                let bleError = BLEError.connectionFailed(error.localizedDescription)
+                updateConnectionState(deviceId: deviceId, state: .error(bleError))
             } else {
-                self.connectionStates[deviceId] = .disconnected
+                updateConnectionState(deviceId: deviceId, state: .disconnected)
             }
-            
-            // Resume disconnection continuation
-            self.disconnectionContinuations[deviceId]?.resume()
-            self.disconnectionContinuations.removeValue(forKey: deviceId)
         }
     }
     
@@ -381,5 +437,44 @@ extension BLEConnectionManager: BLEScanning {
         isScanning = false
         scanContinuation?.finish()
         scanContinuation = nil
+    }
+
+    func observeIsScanning() -> AsyncStream<Bool> {
+        return observationTrackingStream(initialValue: self.isScanning) {
+            // The closure tracks all accessed properties
+            self.isScanning
+        }
+    }
+}
+
+
+// Utility to bridge Observation to AsyncStream
+func observationTrackingStream<T>(
+    initialValue: T,
+    _ apply: @escaping () -> T
+) -> AsyncStream<T> {
+
+    return AsyncStream { continuation in
+        // Yield the initial value immediately
+        continuation.yield(initialValue)
+
+        // Define the recursive observation function
+        @Sendable func observe() {
+            let result = withObservationTracking {
+                apply() // This executes the closure and tracks dependencies (e.g., self.isScanning)
+            } onChange: {
+                // When a tracked dependency changes, schedule a new observation
+                // Dispatching to the main queue ensures we read the new value after it has fully changed.
+                // Since BLEConnectionManager is @MainActor, this is safe.
+                Task { @MainActor in
+                    observe()
+                }
+            }
+            // Yield the *new* value after the change
+            continuation.yield(result)
+        }
+
+        // Start the observation process
+        observe()
     }
 }

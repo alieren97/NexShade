@@ -284,7 +284,7 @@ final class AuthenticationRepository: AuthenticationRepositoryProtocol {
         return AuthenticationResult(
             role: UserRole(rawValue: model.role) ?? .guest,
             permissions: Permissions(rawValue: model.permissionRawValue),
-            authenticatedAt: model.authenticatedAt,
+            authenticatedAt: model.authenticatedAt ?? Date(),
             expiresAt: model.expiresAt
         )
     }

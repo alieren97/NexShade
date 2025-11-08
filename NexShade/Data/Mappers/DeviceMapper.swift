@@ -9,22 +9,49 @@ import Foundation
 
 struct DeviceMapper {
     
-    // DTO → Domain Entity
+    // MARK: - BLEDevice → Device (for use in UI/business logic)
+    func toDomain(_ bleDevice: BLEDevice) -> Device {
+        Device(
+            id: bleDevice.id,
+            name: bleDevice.name ?? "Pergola Device",
+            macAddress: bleDevice.id.uuidString, // Use UUID as fallback for MAC
+            connectionState: .disconnected,
+            lastConnected: nil,
+            lastDisconnected: nil,
+            currentStatus: nil,
+            userRole: .guest,
+            permissions: [],
+            isAuthenticated: false,
+            firmwareVersion: nil,
+            hardwareVersion: nil,
+            serialNumber: nil,
+            createdAt: bleDevice.discoveredAt,
+            updatedAt: bleDevice.discoveredAt
+        )
+    }
+    
+    // MARK: - DeviceModel → Device (for loading from database)
     func toDomain(_ model: DeviceModel) -> Device {
         Device(
             id: model.id,
             name: model.name,
             macAddress: model.macAddress,
             connectionState: ConnectionState(rawValue: model.connectionStateRaw) ?? .disconnected,
+            lastConnected: model.lastConnected,
+            lastDisconnected: nil,
+            currentStatus: nil,
             userRole: UserRole(rawValue: model.userRoleRaw) ?? .guest,
             permissions: Permissions(rawValue: model.permissionRawValue),
             isAuthenticated: model.isAuthenticated,
+            firmwareVersion: nil,
+            hardwareVersion: nil,
+            serialNumber: nil,
             createdAt: model.createdAt,
             updatedAt: model.updatedAt
         )
     }
     
-    // Domain → Model
+    // MARK: - Device → DeviceModel (for saving to database)
     func toModel(_ domain: Device) -> DeviceModel {
         DeviceModel(
             id: domain.id,
@@ -40,6 +67,7 @@ struct DeviceMapper {
         )
     }
     
+    // MARK: - BLE Status Data → PergolaStatus (for status parsing)
     func statusToDomain(_ data: Data) -> PergolaStatus {
         // Parse BLE status data
         // Format: "Position: 75% (Moving)"

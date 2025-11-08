@@ -8,8 +8,17 @@
 import Foundation
 import OSLog
 
+protocol DeviceRepositoryScanning {
+
+    // Discovery
+    func scanForDevices() -> AsyncStream<Device>
+    func isScanning() -> AsyncStream<Bool>
+    func stopScanning()
+}
+
+
 final class DeviceRepository: DeviceRepositoryProtocol {
-    
+
     // MARK: - Dependencies (CORRECTED!)
     
     private let bleDataSource: BLEDataSourceProtocol
@@ -90,5 +99,58 @@ final class DeviceRepository: DeviceRepositoryProtocol {
     
     func sendAuthResponse(deviceId: UUID, signature: Data) async throws -> AuthenticationResult {
         return try await bleDataSource.sendAuthResponse(deviceId: deviceId, signature: signature)
+    }
+    // This is your Domain Layer function signature
+
+
+//    // Private mapping function (or put this logic in an extension/mapper class)
+//    private func map(bleDevice: BLEDevice) -> DeviceModel {
+//        // You need to define how to create your high-level 'Device'
+//        // using properties from the low-level 'BLEDevice'.
+//        return Device(
+//            id: bleDevice.id,
+//            name: bleDevice.name ?? "Unknown Device",
+//        )
+//    }
+}
+
+extension AsyncStream {
+    // Map the elements of an AsyncStream to a new type
+    func map<T>(transform: @escaping (Element) -> T) -> AsyncStream<T> {
+        return AsyncStream<T> { continuation in
+            let task = Task {
+                for await element in self {
+                    let mappedElement = transform(element)
+                    continuation.yield(mappedElement)
+                }
+                continuation.finish()
+            }
+
+            // Handle cancellation
+            continuation.onTermination = { @Sendable _ in
+                task.cancel()
+            }
+        }
+    }
+}
+
+
+extension DeviceRepository: DeviceRepositoryScanning {
+
+    func scanForDevices() -> AsyncStream<Device> {
+
+        let bleDeviceStream: AsyncStream<BLEDevice> = bleDataSource.startScanning()
+
+        return bleDeviceStream.map { bleDevice in
+            Device(name: "test", macAddress: "1234")
+        }
+    }
+
+    func stopScanning() {
+        bleDataSource.stopScan()
+    }
+
+    func isScanning() -> AsyncStream<Bool> {
+        bleDataSource.isScanning()
     }
 }

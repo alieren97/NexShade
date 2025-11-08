@@ -24,7 +24,7 @@ final class ScanCoordinator: Coordinator {
 
     // MARK: - Dependencies
 
-    private let container: DependencyContainer
+    let container: DependencyContainer
     private weak var parent: TabCoordinator?
 
     // MARK: - Initialization
@@ -79,10 +79,10 @@ struct ScanCoordinatorView: View {
             VStack(content: {
                 Text("Scan View")
             })
-//            ScanView(
-//                viewModel: coordinator.container.makeScanViewModel(),
+            ScanView(
+                viewModel: coordinator.container.makeScanViewModel(),
 //                coordinator: coordinator
-//            )
+            )
             .navigationDestination(for: Route.self) { route in
                 destinationView(for: route)
             }

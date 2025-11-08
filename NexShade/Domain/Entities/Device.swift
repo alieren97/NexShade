@@ -7,49 +7,23 @@
 
 import Foundation
 
-/// Device entity - represents a pergola control device
 struct Device: Identifiable, Equatable, Hashable {
-    
-    // MARK: - Identity
-    
     let id: UUID
     var name: String
     let macAddress: String
-    
-    // MARK: - Connection State
-    
     var connectionState: ConnectionState
     var lastConnected: Date?
     var lastDisconnected: Date?
-    
-    // MARK: - Current Status
-    
     var currentStatus: PergolaStatus?
-    
-    // MARK: - User's Relationship with Device
-    
-    /// The role this user has with this device (owner, guest, service tech)
     var userRole: UserRole
-    
-    /// The permissions this user has for this device
     var permissions: Permissions
-    
-    /// Whether the user is currently authenticated with this device
     var isAuthenticated: Bool
-    
-    // MARK: - Device Info
-    
     var firmwareVersion: String?
     var hardwareVersion: String?
     var serialNumber: String?
-    
-    // MARK: - Metadata
-    
     let createdAt: Date
     var updatedAt: Date
-    
-    // MARK: - Initialization
-    
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -83,37 +57,47 @@ struct Device: Identifiable, Equatable, Hashable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
-    
-    // MARK: - Computed Properties
-    
-    /// Whether the device is currently connected
-    var isConnected: Bool {
-        connectionState == .ready
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(name)
+        hasher.combine(macAddress)
     }
-    
-    /// Whether the user is the owner of this device
-    var isOwner: Bool {
-        userRole == .owner
+
+    static func == (lhs: Device, rhs: Device) -> Bool {
+        lhs.id == rhs.id &&
+        lhs.name == rhs.name &&
+        lhs.macAddress == rhs.macAddress &&
+        lhs.connectionState == rhs.connectionState &&
+        lhs.currentStatus == rhs.currentStatus &&
+        lhs.userRole == rhs.userRole &&
+        lhs.permissions == rhs.permissions &&
+        lhs.isAuthenticated == rhs.isAuthenticated
     }
-    
-    /// Whether the user is a service technician
-    var isServiceTechnician: Bool {
-        userRole == .serviceTechnician
-    }
-    
-    /// Whether the user can control the device
-    var canControl: Bool {
-        isAuthenticated && permissions.contains(.basicControl)
-    }
-    
-    /// Whether the user can manage other users
-    var canManageUsers: Bool {
-        isAuthenticated && permissions.contains(.userManagement)
-    }
-    
-    /// Display name for the device
-    var displayName: String {
-        name.isEmpty ? "Pergola Device" : name
-    }
+
+    var isConnected: Bool { connectionState == .ready }
+    var isOwner: Bool { userRole == .owner }
+    var canControl: Bool { isAuthenticated && permissions.contains(.basicControl) }
+    var canManageUsers: Bool { isAuthenticated && permissions.contains(.userManagement) }
+    var displayName: String { name.isEmpty ? "Pergola Device" : name }
 }
 
+//enum ConnectionState: String, Codable, Equatable, Hashable {
+//    case disconnected, scanning, connecting
+//    case discoveringServices, discoveringCharacteristics
+//    case ready, disconnecting, error
+//
+//    var isConnected: Bool { self == .ready }
+//    var description: String {
+//        switch self {
+//        case .disconnected: return "Disconnected"
+//        case .scanning: return "Scanning..."
+//        case .connecting: return "Connecting..."
+//        case .discoveringServices: return "Discovering services..."
+//        case .discoveringCharacteristics: return "Setting up..."
+//        case .ready: return "Connected"
+//        case .disconnecting: return "Disconnecting..."
+//        case .error: return "Connection Error"
+//        }
+//    }
+//}

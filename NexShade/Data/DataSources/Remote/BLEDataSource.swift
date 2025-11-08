@@ -33,6 +33,10 @@ protocol BLEDataSourceProtocol {
     // Service (for technician)
     func startServiceSession(deviceId: UUID) async throws
     func endServiceSession(deviceId: UUID) async throws
+
+    func startScanning() -> AsyncStream<BLEDevice>
+    func stopScan()
+    func isScanning() -> AsyncStream<Bool>
 }
 
 /// BLE data source - translates domain operations to BLE characteristic operations
@@ -64,7 +68,7 @@ final class BLEDataSource: BLEDataSourceProtocol {
     
     func disconnect(from deviceId: UUID) async throws {
         logger.info("Disconnecting from device: \(deviceId)")
-        await connectionManager.disconnect(from: deviceId)
+        try await connectionManager.disconnect(from: deviceId)
     }
     
     func discoverServices(for deviceId: UUID) async throws {
@@ -131,14 +135,14 @@ final class BLEDataSource: BLEDataSourceProtocol {
     // MARK: - Control
     
     func sendCommand(deviceId: UUID, command: PergolaCommand) async throws {
-        logger.info("Sending command to device: \(deviceId) - \(command.stringValue)")
-        
+        logger.info("Sending command to device: \(deviceId) - \(command.description)")
+
         guard let peripheral = connectionManager.getPeripheral(for: deviceId) else {
             throw DataSourceError.deviceNotConnected
         }
         
         // Encode command
-        guard let commandData = command.stringValue.data(using: .utf8) else {
+        guard let commandData = command.description.data(using: .utf8) else {
             throw DataSourceError.invalidData
         }
         
@@ -307,12 +311,7 @@ final class BLEDataSource: BLEDataSourceProtocol {
             }
         }
         
-        return AuthenticationResult(
-            success: true,
-            error: nil,
-            role: role,
-            permissions: permissions
-        )
+        return AuthenticationResult(role: role, permissions: permissions)
     }
     
     private func parseStatus(from data: Data) throws -> PergolaStatus {
@@ -363,6 +362,22 @@ final class BLEDataSource: BLEDataSourceProtocol {
         }
         
         return data
+    }
+
+    func isScanning() -> AsyncStream<Bool> {
+        return connectionManager.observeIsScanning()
+    }
+}
+
+// MARK: - Scan
+extension BLEDataSource {
+
+    func startScanning() -> AsyncStream<BLEDevice> {
+        return connectionManager.startScanning()
+    }
+
+    func stopScan() {
+        connectionManager.stopScanning()
     }
 }
 

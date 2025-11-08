@@ -7,45 +7,30 @@
 
 import Foundation
 
-/// User role enum
 enum UserRole: String, Codable, Equatable, CaseIterable {
-    case owner
-    case guest
-    case serviceTechnician
-    
-    /// Default permissions for this role
+    case owner, guest, serviceTechnician
+
     var defaultPermissions: Permissions {
         switch self {
-        case .owner:
-            return .owner
-        case .guest:
-            return .basicGuest
-        case .serviceTechnician:
-            return .serviceTechnician
+        case .owner: return .owner
+        case .guest: return .basicGuest
+        case .serviceTechnician: return .serviceTechnician
         }
     }
-    
-    /// Display name
+
     var displayName: String {
         switch self {
-        case .owner:
-            return "Owner"
-        case .guest:
-            return "Guest"
-        case .serviceTechnician:
-            return "Service Technician"
+        case .owner: return "Owner"
+        case .guest: return "Guest"
+        case .serviceTechnician: return "Service Technician"
         }
     }
-    
-    /// Icon name
+
     var iconName: String {
         switch self {
-        case .owner:
-            return "crown.fill"
-        case .guest:
-            return "person.fill"
-        case .serviceTechnician:
-            return "wrench.and.screwdriver.fill"
+        case .owner: return "crown.fill"
+        case .guest: return "person.fill"
+        case .serviceTechnician: return "wrench.and.screwdriver.fill"
         }
     }
 }

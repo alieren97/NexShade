@@ -9,7 +9,7 @@
 import Foundation
 import CoreBluetooth
 
-enum BLEError: LocalizedError, Equatable {
+enum BLEError: LocalizedError, Equatable, Hashable {
     case bluetoothPoweredOff
     case bluetoothUnauthorized
     case bluetoothUnsupported
@@ -26,7 +26,9 @@ enum BLEError: LocalizedError, Equatable {
     case operationTimeout
     case peripheralNotReady
     case unknown(String)
-    
+    case connectionInProgress(UUID)
+    case tooManyConcurrentConnections
+
     var errorDescription: String? {
         switch self {
         case .bluetoothPoweredOff:
@@ -61,6 +63,10 @@ enum BLEError: LocalizedError, Equatable {
             return "Device is not ready. Please wait."
         case .unknown(let message):
             return "An error occurred: \(message)"
+        case .connectionInProgress:
+            return "Connection already in progress"
+        case .tooManyConcurrentConnections:
+            return "Too many concurrent connections (max: 5)"
         }
     }
     

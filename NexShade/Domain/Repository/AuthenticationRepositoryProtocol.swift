@@ -13,17 +13,17 @@ protocol AuthenticationRepositoryProtocol {
     func getPrivateKey(for deviceId: UUID) async throws -> Data?
     func savePrivateKey(_ key: Data, for deviceId: UUID) async throws
     func deletePrivateKey(for deviceId: UUID) async throws
-    
+
     // Authentication
     func hasCredentials(for deviceId: UUID) async throws -> Bool
     func authenticate(deviceId: UUID) async throws -> AuthenticationResult
-    func signChallenge(_ challenge: Data, with privateKey: Data) async throws -> Data
-    func clearAuthState(for deviceId: UUID) async throws
-    
+    func signChallenge(_ challenge: Data, with privateKeyData: Data) async throws -> Data
+
     // Permissions
     func getPermissions(for deviceId: UUID) async throws -> Permissions
     func isOwner(of deviceId: UUID) async throws -> Bool
     
-    // Auth State
+    // State
     func storeAuthResult(_ result: AuthenticationResult, for deviceId: UUID) async throws
+    func clearAuthState(for deviceId: UUID) async throws
 }

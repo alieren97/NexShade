@@ -16,7 +16,7 @@ final class AuthenticationResultModel {
     var deviceId: UUID
     var role: String
     var permissionRawValue: Int
-    var authenticatedAt: Date
+    var authenticatedAt: Date?
     var expiresAt: Date?
     
     init(
@@ -24,7 +24,7 @@ final class AuthenticationResultModel {
         deviceId: UUID,
         role: String,
         permissionRawValue: Int,
-        authenticatedAt: Date,
+        authenticatedAt: Date? = Date(),
         expiresAt: Date? = nil
     ) {
         self.id = id

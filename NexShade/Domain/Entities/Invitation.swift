@@ -5,41 +5,20 @@
 //  Created by Ali Eren on 7.11.2025.
 //
 
-
-// Domain/Entities/Invitation.swift
-
 import Foundation
 
-/// Invitation entity - represents an invitation for guest access
 struct Invitation: Identifiable, Equatable, Hashable, Codable {
-    
-    // MARK: - Identity
-    
     let id: UUID
     let deviceId: UUID
-    
-    // MARK: - Invitation Details
-    
-    let code: String // 8-character alphanumeric code
+    let code: String
     let permissions: Permissions
-    
-    // MARK: - Guest Info
-    
     var guestName: String?
-    var guestPublicKey: String? // Set when redeemed
-    
-    // MARK: - Dates
-    
+    var guestPublicKey: String?
     let createdAt: Date
     let expiresAt: Date?
     var redeemedAt: Date?
-    
-    // MARK: - Status
-    
     var isRedeemed: Bool
-    
-    // MARK: - Initialization
-    
+
     init(
         id: UUID = UUID(),
         deviceId: UUID,
@@ -63,37 +42,16 @@ struct Invitation: Identifiable, Equatable, Hashable, Codable {
         self.redeemedAt = redeemedAt
         self.isRedeemed = isRedeemed
     }
-    
-    // MARK: - Computed Properties
-    
-    /// Whether the invitation has expired
+
     var isExpired: Bool {
-        guard let expiresAt = expiresAt else {
-            return false // No expiration
-        }
+        guard let expiresAt = expiresAt else { return false }
         return Date() > expiresAt
     }
-    
-    /// Whether the invitation is still valid (not redeemed and not expired)
-    var isValid: Bool {
-        !isRedeemed && !isExpired
-    }
-    
-    /// Days until expiration
-    var daysUntilExpiration: Int? {
-        guard let expiresAt = expiresAt else {
-            return nil
-        }
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.day], from: Date(), to: expiresAt)
-        return components.day
-    }
-    
-    /// Formatted code for display (e.g., "ABCD-1234")
+
+    var isValid: Bool { !isRedeemed && !isExpired }
+
     var formattedCode: String {
         let index = code.index(code.startIndex, offsetBy: 4)
-        let firstPart = code[..<index]
-        let secondPart = code[index...]
-        return "\(firstPart)-\(secondPart)"
+        return "\(code[..<index])-\(code[index...])"
     }
 }

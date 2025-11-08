@@ -5,24 +5,18 @@
 //  Created by Ali Eren on 6.11.2025.
 //
 
-
-enum PergolaCommand {
+enum PergolaCommand: Equatable {
     case open
     case close
     case stop
     case setPosition(Int)
-    
-    var stringValue: String {
+
+    var description: String {
         switch self {
-        case .open:
-            return "open"
-        case .close:
-            return "close"
-        case .stop:
-            return "stop"
-        case .setPosition(let position):
-            // Example: "set-position:50"
-            return "set-position:\(position)"
+        case .open: return "Open"
+        case .close: return "Close"
+        case .stop: return "Stop"
+        case .setPosition(let pos): return "Set Position to \(pos)%"
         }
     }
 }

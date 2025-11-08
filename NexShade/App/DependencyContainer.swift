@@ -15,7 +15,7 @@ final class DependencyContainer {
     private lazy var bleConnectionManager = BLEConnectionManager()
     private lazy var bleCharacteristicManager = BLECharacteristicManager()
     private lazy var cryptoManager = CryptoManager()
-    private lazy var keychainDataSource = KeychainDataSource()
+
     private lazy var modelContainer: ModelContainer = {
         let schema = Schema([
             DeviceModel.self,
@@ -37,14 +37,17 @@ final class DependencyContainer {
         )
     }
     
-    @MainActor
     private func makeLocalDataSource() -> LocalDataSource {
         LocalDataSource(modelContainer: modelContainer)
     }
 
+    private func makeKeychainDataSource() -> KeychainDataSource {
+        KeychainDataSource()
+    }
+
     // MARK: - Repositories
     
-    func makeDeviceRepository() -> DeviceRepositoryProtocol {
+    func makeDeviceRepository() -> DeviceRepositoryProtocol & DeviceRepositoryScanning {
         DeviceRepository(
             bleDataSource: makeBLEDataSource(),
             localDataSource: makeLocalDataSource(),
@@ -55,7 +58,7 @@ final class DependencyContainer {
     func makeAuthenticationRepository() -> AuthenticationRepositoryProtocol {
         AuthenticationRepository(
             bleDataSource: makeBLEDataSource(),
-            keychainDataSource: keychainDataSource,
+            keychainDataSource: makeKeychainDataSource(),
             localDataSource: makeLocalDataSource(),
             cryptoManager: cryptoManager
         )
@@ -70,9 +73,7 @@ final class DependencyContainer {
     // MARK: - Use Cases
     
     func makeScanForDevicesUseCase() -> ScanForDevicesUseCaseProtocol {
-        ScanForDevicesUseCase(
-            bleScanning: bleConnectionManager
-        )
+        ScanForDevicesUseCase(deviceRepositoryScanning: makeDeviceRepository())
     }
     
     func makeConnectToDeviceUseCase() -> ConnectToDeviceUseCaseProtocol {
@@ -119,19 +120,19 @@ final class DependencyContainer {
     
     // MARK: - View Models
     
-    func makeControlViewModel() -> ControlViewModel {
-        ControlViewModel(
-            connectUseCase: makeConnectToDeviceUseCase(),
-            controlUseCase: makeControlPergolaUseCase(),
-            getStatusUseCase: makeGetDeviceStatusUseCase(),
-            disconnectUseCase: makeDisconnectDeviceUseCase()
-        )
-    }
-    
+//    func makeControlViewModel() -> ControlViewModel {
+//        ControlViewModel(
+//            connectUseCase: makeConnectToDeviceUseCase(),
+//            controlUseCase: makeControlPergolaUseCase(),
+//            getStatusUseCase: makeGetDeviceStatusUseCase(),
+//            disconnectUseCase: makeDisconnectDeviceUseCase()
+//        )
+//    }
+//    
     func makeScanViewModel() -> ScanViewModel {
         ScanViewModel(
-            scanUseCase: makeScanForDevicesUseCase(),
-            connectUseCase: makeConnectToDeviceUseCase()
+            scanningUseCase: makeScanForDevicesUseCase(),
+            connectionUseCase: makeConnectToDeviceUseCase()
         )
     }
 }
